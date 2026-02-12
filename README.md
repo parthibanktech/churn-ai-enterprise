@@ -1,5 +1,5 @@
 # 💎 ChurnAI Enterprise: Institutional Prediction System
-### *15-Year Standard Machine Learning Production Framework*
+
 
 ---
 
@@ -45,4 +45,4 @@ This project is organized into modular "Institutional Sheets" representing the 2
 3.  **Research**: Open `single_file_DS_Masterclass.ipynb` for the full experimental walkthrough.
 
 ---
-*Created by AntiGravity - 15-Year Data Science Professional Protocol.*
+

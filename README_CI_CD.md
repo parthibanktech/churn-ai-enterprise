@@ -40,4 +40,4 @@ I have initialized a `.gitignore` and prepared a GitHub Actions workflow.
     ```
 
 ---
-*Created by ChurnAI Enterprise Protocol.*
+
