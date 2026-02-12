@@ -1,6 +1,6 @@
-# 🌊 ChurnAI System Workflow
+# 🌊 ChurnAI System Workflow & Architecture
 
-This document outlines the end-to-end data flow and architectural logic of the ChurnAI Enterprise system.
+This document provides a comprehensive overview of the ChurnAI Enterprise system, detailing the end-to-end data flow, architectural logic, and repository structure.
 
 ## 1. High-Level Architecture
 The system follows a decoupled architecture with a **FastAPI** backend and a **React (Vite)** frontend.
@@ -21,37 +21,70 @@ graph TD
 
 ### Phase A: Data Ingestion & Sanitization
 *   **Source**: Users upload a CSV file or trigger a "Sample Test" via the UI.
-*   **Cleaning**: The system performs "Extreme Cleaning" in `app.py`, stripping whitespace, handling multiple encodings (UTF-8, Latin-1), and sanitizing column names to match enterprise standards.
+*   **Cleaning**: The system performs "Extreme Cleaning" in `app.py`, stripping whitespace, handling multiple encodings (UTF-8, Latin-1, cp1252), and sanitizing column names to match enterprise standards using regex.
 
 ### Phase B: Feature Engineering (`features/feature_engineering.py`)
 Raw Telco data is transformed into behavioral insights:
 *   **TotalCharges Handling**: Converts strings to numeric and handles missing values.
-*   **Categorical Encoding**: Maps binary features (Gender, Partner) to integers.
-*   **OHE (One-Hot Encoding)**: Expands categorical variables like `Contract` and `InternetService`.
+*   **Tenure Categorization**: Bins tenure into stages like 'New', 'Junior', 'Middle', 'Senior', and 'Legend'.
+*   **Risk Indicators**: Creates flags for `Month-to-month` contracts and `Electronic check` payments.
+*   **Behavioral Intensity**: Calculates a `service_count` based on the number of active services.
+*   **Economic Value**: Computes `price_sensitivity` and `clv_proxy` (Customer Lifetime Value).
 
 ### Phase C: ML Inference (`models/`)
 *   **Model**: Uses a **Gradient Boosting Champion** model (`production_pipeline_bundle.joblib`).
-*   **Pipeline**: A full Scikit-learn Pipeline including scaling and the estimator.
-*   **Output**: Generates raw probability scores for each customer.
+*   **Pipeline**: A full Scikit-learn Pipeline that encapsulates scaling and the estimator for zero-leakage inference.
+*   **Output**: Generates raw probability scores for each record.
 
 ### Phase D: Risk Intelligence
 Scores are passed through a classification logic:
-*   **Critical (>85%)**: Immediate attention (Red).
-*   **At-Risk (60-85%)**: Periodic follow-up (Orange).
-*   **Stable (15-60%)**: Baseline retention (Yellow).
-*   **Loyal (<15%)**: High retention (Green).
+*   **Critical (>85%)**: Immediate attention required (Red).
+*   **At-Risk (60-85%)**: Periodic follow-up recommended (Orange).
+*   **Stable (15-60%)**: Baseline retention profile (Yellow).
+*   **Loyal (<15%)**: High retention/loyalty profile (Green).
 
-## 3. DevOps & Deployment
-*   **Dockerization**: A multi-stage `Dockerfile` compiles the React app and packages it with the Python API.
-*   **CI/CD**: GitHub Actions (`.github/workflows/pipeline.yml`) runs on every push to:
-    1.  Install dependencies.
-    2.  Run backend unit tests.
-    3.  Build the frontend assets.
-    4.  Prepare for cloud deployment (Render/Railway).
+## 3. Data Schema & Field Details
+The system expects the **IBM Telco Churn** standard format.
 
-## 4. Repository Structure
-*   `app.py`: Main entry point and API routing.
-*   `frontend/`: React source code (App.jsx is the core UI logic).
-*   `models/`: Serialized model artifacts.
-*   `tests/`: Quality assurance scripts.
-*   `docs/`: Data dictionary and metadata.
+| Feature Group | Fields | Description |
+| :--- | :--- | :--- |
+| **Demographics** | `gender`, `SeniorCitizen`, `Partner`, `Dependents` | Basic customer profile information. |
+| **Services** | `PhoneService`, `InternetService`, `OnlineSecurity`, etc. | Digital services subscribed to by the customer. |
+| **Account Info** | `tenure`, `Contract`, `PaperlessBilling`, `PaymentMethod` | Terms of service and billing preferences. |
+| **Financials** | `MonthlyCharges`, `TotalCharges` | Revenue metrics used for churn correlation. |
+| **Engineered** | `service_count`, `clv_proxy`, `price_sensitivity` | Synthetic features generated at runtime for better accuracy. |
+
+## 4. Repository Directory & Usage
+A detailed mapping of the project structure and file responsibilities.
+
+```text
+customer_problem/
+├── app.py                # 🛠️ Main API Hub. Handles routing, file sanitization, and serves the frontend.
+├── Dockerfile           # 🐳 Container Logic. Multi-stage build (Node -> Python) for production.
+├── requirements.txt     # 📦 Python Dependencies. List of all libraries needed for the ML engine.
+├── WORKFLOW.md          # 📖 (This file) Complete system architectural documentation.
+├── .github/             # 🤖 Automation.
+│   └── workflows/
+│       └── pipeline.yml # CI/CD logic for testing and auto-building on GitHub.
+├── api_service/         # 🛰️ Specialized API modules (additional logic).
+├── data/                # 📂 Data Storage.
+│   └── raw/             # Contains 'Telco-Customer-Churn.csv' used for sample tests.
+├── features/            # 🧠 Intelligence Layer.
+│   └── feature_engineering.py # Core logic for transforming raw data into ML-ready features.
+├── frontend/            # 💻 Dashboard Layer (React/Vite).
+│   ├── src/
+│   │   ├── App.jsx      # The "Brain" of the UI. Manages API calls and dashboard state.
+│   │   └── index.css    # Premium CSS design tokens and dark-mode styling.
+│   └── dist/            # Compiled production files (generated by 'npm run build').
+├── models/              # 🏛️ Artifact Store.
+│   └── production_pipeline_bundle.joblib # The trained XGBoost model and scaler.
+├── src/                 # 🏗️ Configuration & Shared Libs.
+│   └── config.py        # Centralized path and parameter management.
+└── tests/               # 🧪 Quality Logic.
+    └── test_pipeline.py # Unit tests for ensuring prediction accuracy and API stability.
+```
+
+## 5. DevOps & Deployment
+*   **Dockerization**: The `Dockerfile` compiles the React app into static assets and serves them via FastAPI to ensure a single, portable unit.
+*   **CI/CD**: GitHub Actions verifies backend tests and frontend builds on every commit.
+*   **Production**: Designed for hosting on Render, Railway, or any container-ready cloud provider.
