@@ -1,3 +1,7 @@
+# ChurnAI CI/CD Pipeline
+# This workflow automates the testing, building, and deployment preparation for the ChurnAI project.
+# It runs on every push to the 'main' branch or when a Pull Request is opened against 'main'.
+
 name: ChurnAI CI/CD Pipeline
 
 on:
@@ -7,28 +11,37 @@ on:
     branches: [ main ]
 
 jobs:
+  # JOB 1: Test and Build
+  # This job ensures that both the Python backend and React frontend are healthy.
   test-and-build:
+    name: Backend Test & Frontend Build
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    # 1. Checkout the latest code from the repository
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
+    # 2. Setup Python environment for the ML Backend
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
+        cache: 'pip' # Speeds up subsequent runs by caching dependencies
 
+    # 3. Install Backend requirements (ML libraries, FastAPI, etc.)
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest
 
+    # 4. Run automated tests to verify model loading and API logic
     - name: Run Backend Tests
       run: |
         pytest tests/
 
+    # 5. Setup Node.js for the React Analytics Dashboard
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
@@ -36,31 +49,34 @@ jobs:
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
+    # 6. Install Frontend dependencies (Lucide, Recharts, Axios, etc.)
     - name: Install Frontend dependencies
       working-directory: ./frontend
       run: npm ci
 
+    # 7. Compile the React app into optimized static files for production
     - name: Build Frontend
       working-directory: ./frontend
       run: npm run build
 
+    # 8. Upload the 'dist' folder so it can be used by the deploy job or for inspection
     - name: Archive Frontend Artifact
       uses: actions/upload-artifact@v4
       with:
         name: frontend-dist
         path: frontend/dist/
 
+  # JOB 2: Deploy
+  # This job only runs if the 'test-and-build' job passes and the branch is 'main'.
   deploy:
+    name: Production Deployment
     needs: test-and-build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Production
         run: |
-          echo "Triggering deployment to Render/Railway..."
-          # Example: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
-          # Or using Render Action:
-          # uses: johnbeynon/render-deploy-action@v0.0.8
-          # with:
-          #   service-id: ${{ secrets.RENDER_SERVICE_ID }}
-          #   api-key: ${{ secrets.RENDER_API_KEY }}
+          # Placeholder for deployment logic
+          # In a real scenario, you would use a Render/Railway deploy hook or CLI
+          echo "Triggering deployment to Production Cloud..."
+          echo "Verified: All tests passed and build is stable."
