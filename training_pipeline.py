@@ -3,93 +3,153 @@ import numpy as np
 import joblib
 import os
 import logging
+import time
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import roc_auc_score, classification_report
+from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
 from scipy.stats import ks_2samp
-from xgboost import XGBClassifier
 
 from features.feature_engineering import engineer_enterprise_features
 from preprocessing_pipeline import get_preprocessing_pipeline
 from src.config import Config
+from src.models_factory import get_algorithm_suite
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
-logger = logging.getLogger("MASTER-TRAINER")
+# Setup Logging
+os.makedirs(Config.REPORTS_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(Config.REPORTS_DIR, "training.log")),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("UNIFIED-TRAINER")
 
-def run_production_training():
+def run_benchmarking_and_training():
     """
-    [PROCESS 7 & 8: CHAMPION TRAINING & EVALUATION]
-    Strict 1:1 Port of Masterclass Notebook Methodology.
+    1. Ingest Data
+    2. Zero-Leakage Split
+    3. Feature Engineering
+    4. Benchmark 20 Algorithms
+    5. Select Champion
+    6. Package Production Bundle
     """
-    logger.info("🎬 [PROCESS 1-2] Ingesting Institutional Data...")
+    logger.info("🎬 Initializing Unified Training Pipeline...")
+    
     if not os.path.exists(Config.RAW_DATA_PATH):
-        logger.error("🛑 Raw data missing.")
+        logger.error(f"🛑 Raw data missing at {Config.RAW_DATA_PATH}")
         return
 
+    # 1. Ingest
     df_raw = pd.read_csv(Config.RAW_DATA_PATH)
-    # Ensure numeric TotalCharges (Masterclass Step 2)
     df_raw['TotalCharges'] = pd.to_numeric(df_raw['TotalCharges'], errors='coerce')
-
-    # [PROCESS 4] Zero-Leakage Policy: Split FIRST
+    
+    # 2. Split FIRST (Zero Leakage)
     train_df, test_df = train_test_split(
-        df_raw, test_size=0.2, random_state=42, stratify=df_raw['Churn']
+        df_raw, test_size=Config.TEST_SIZE, random_state=Config.RANDOM_STATE, stratify=df_raw['Churn']
     )
-    logger.info("✅ [PROCESS 4] Zero-Leakage Split Complete.")
+    logger.info("✅ Zero-Leakage Split Complete.")
 
-    # [PROCESS 5] Behavioral Feature Synthesis
+    # 3. Feature Engineering
     train_eng = engineer_enterprise_features(train_df)
     test_eng = engineer_enterprise_features(test_df)
-
-    # Define Feature Sets (Step 6)
+    
+    # Define Features
     num_features = ['tenure', 'MonthlyCharges', 'TotalCharges', 'clv_proxy', 'price_sensitivity', 'service_count']
     cat_features = ['gender', 'SeniorCitizen', 'Partner', 'Dependents', 'Contract', 'PaymentMethod', 'tenure_bin']
-
-    # [PROCESS 6] Build Pipeline
-    preprocessor = get_preprocessing_pipeline(num_features, cat_features)
-
-    # [PROCESS 7] Champion Algorithm (Gradient Boosting)
-    # Swapped from XGBoost to Gradient Boosting as it achieved 0.8437 in benchmarks
-    from sklearn.ensemble import GradientBoostingClassifier
-    clf = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
     
-    champion_pipeline = Pipeline([
-        ('prep', preprocessor),
-        ('clf', clf)
-    ])
-
-    # Training
+    # 4. Preprocessing Pipeline
+    preprocessor = get_preprocessing_pipeline(num_features, cat_features)
+    
     X_train = train_eng.drop('Churn', axis=1)
     y_train = train_eng['Churn'].map({'Yes': 1, 'No': 0})
-    
-    logger.info("🚀 [PROCESS 7] Fitting Champion Engine (Gradient Boosting)...")
-    champion_pipeline.fit(X_train, y_train)
-
-    # [PROCESS 8] Professional Metric Evaluation
     X_test = test_eng.drop('Churn', axis=1)
     y_test = test_eng['Churn'].map({'Yes': 1, 'No': 0})
-    
-    probs = champion_pipeline.predict_proba(X_test)[:, 1]
-    auc = roc_auc_score(y_test, probs)
-    ks_stat, _ = ks_2samp(probs[y_test == 1], probs[y_test == 0])
-    
-    logger.info("🏆 [PROCESS 8] Meta-Metrics: AUC=%.4f, KS=%.4f", auc, ks_stat)
 
-    # Serialization
+    # Prepare data for benchmarking (Sklearn models need numerical input)
+    # We use the preprocessor to transform data once for benchmarking
+    logger.info("🛠️ Preprocessing data for multi-algorithm benchmark...")
+    X_train_proc = preprocessor.fit_transform(X_train)
+    X_test_proc = preprocessor.transform(X_test)
+    
+    # 5. Benchmark 20 Algorithms
+    logger.info("🚀 Starting Benchmark of 20 Algorithms...")
+    suite = get_algorithm_suite(Config.RANDOM_STATE)
+    benchmark_results = []
+    
+    best_auc = 0
+    champion_model = None
+    champion_name = ""
+
+    for name, model in suite.items():
+        start = time.time()
+        try:
+            model.fit(X_train_proc, y_train)
+            
+            if hasattr(model, "predict_proba"):
+                probs = model.predict_proba(X_test_proc)[:, 1]
+            else:
+                probs = model.predict(X_test_proc)
+                
+            auc = roc_auc_score(y_test, probs)
+            acc = accuracy_score(y_test, (probs > 0.5).astype(int))
+            elapsed = time.time() - start
+            
+            benchmark_results.append({
+                "algorithm": name,
+                "roc_auc": float(auc),
+                "accuracy": float(acc),
+                "training_time": float(elapsed)
+            })
+            
+            logger.info(f"✅ {name:25} | AUC: {auc:.4f} | Time: {elapsed:.2f}s")
+            
+            if auc > best_auc:
+                best_auc = auc
+                champion_model = model
+                champion_name = name
+                
+        except Exception as e:
+            logger.error(f"❌ {name} failed: {str(e)}")
+
+    # Save Results
+    results_df = pd.DataFrame(benchmark_results).sort_values(by="roc_auc", ascending=False)
+    results_df.to_csv(Config.BENCHMARK_REPORT_PATH, index=False)
+    logger.info(f"📊 Benchmark Report Saved to {Config.BENCHMARK_REPORT_PATH}")
+
+    # 6. Serializing Champion Bundle
+    logger.info(f"🏆 CHAMPION IDENTIFIED: {champion_name} (AUC: {best_auc:.4f})")
+    
+    # Re-wrap the best model into a full Pipeline for production
+    # This ensures deployment only needs raw data
+    production_pipeline = Pipeline([
+        ('prep', preprocessor),
+        ('clf', champion_model)
+    ])
+    
+    # Calculate KS Stat for the champion
+    champion_probs = production_pipeline.predict_proba(X_test)[:, 1]
+    ks_stat, _ = ks_2samp(champion_probs[y_test == 1], champion_probs[y_test == 0])
+
     bundle = {
-        'pipeline': champion_pipeline,
+        'pipeline': production_pipeline,
         'metadata': {
-            'auc_score': float(auc),
+            'auc_score': float(best_auc),
             'ks_stat': float(ks_stat),
-            'features': X_train.columns.tolist(),
-            'standard': "ChurnAI Masterclass 2.0",
-            'engine': "Gradient Boosting Champion"
+            'engine': champion_name,
+            'version': "2.5.0",
+            'last_updated': time.strftime("%Y-%m-%d"),
+            'features': X_train.columns.tolist()
         }
     }
     
     os.makedirs(Config.MODELS_DIR, exist_ok=True)
     bundle_path = os.path.join(Config.MODELS_DIR, "production_pipeline_bundle.joblib")
     joblib.dump(bundle, bundle_path)
-    logger.info("⛳️ Bundle Serialized: %s", bundle_path)
+    
+    logger.info(f"⛳️ Production Bundle Serialized: {bundle_path}")
+    logger.info("✨ Unified Training Pipeline Complete.")
 
 if __name__ == "__main__":
-    run_production_training()
+    run_benchmarking_and_training()
