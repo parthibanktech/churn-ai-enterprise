@@ -1,0 +1,15 @@
+pandera
+xgboost
+lightgbm
+catboost
+shap
+pandas
+numpy
+scikit-learn
+joblib
+matplotlib
+seaborn
+fastapi
+uvicorn
+python-multipart
+axios
