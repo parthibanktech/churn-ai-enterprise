@@ -92,8 +92,10 @@ async def test_sample_data():
         return await predict_churn(mock_file)
         
     except Exception as e:
-        logger.error(f"Sample Test Failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Sample Test Failed: {e}\n{error_details}")
+        raise HTTPException(status_code=500, detail=f"Sample Test Failed: {str(e)}")
 
 @app.post("/api/predict")
 async def predict_churn(file: UploadFile = File(...)):
