@@ -13,7 +13,7 @@ import {
   TrendingDown, UserCheck, Clock, DollarSign, Calendar, Star
 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8080/api";
+const API_BASE = "/api";
 
 function App() {
   const [step, setStep] = useState('LOGIN');
