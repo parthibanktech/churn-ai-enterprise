@@ -26,7 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("UNIFIED-TRAINER")
 
-def run_benchmarking_and_training():
+def run_production_training():
     """
     1. Ingest Data
     2. Zero-Leakage Split
@@ -39,7 +39,7 @@ def run_benchmarking_and_training():
     
     if not os.path.exists(Config.RAW_DATA_PATH):
         logger.error(f"🛑 Raw data missing at {Config.RAW_DATA_PATH}")
-        return
+        return None, None
 
     # 1. Ingest
     df_raw = pd.read_csv(Config.RAW_DATA_PATH)
@@ -150,6 +150,7 @@ def run_benchmarking_and_training():
     
     logger.info(f"⛳️ Production Bundle Serialized: {bundle_path}")
     logger.info("✨ Unified Training Pipeline Complete.")
+    return production_pipeline, bundle_path
 
 if __name__ == "__main__":
-    run_benchmarking_and_training()
+    run_production_training()
