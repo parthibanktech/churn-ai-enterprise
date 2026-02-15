@@ -39,6 +39,7 @@ yarn-error.log*
 
 # Models and Data (Large Files)
 models/*.joblib
+!models/production_pipeline_bundle.joblib
 models/*.pkl
 data/raw/*.csv
 data/processed/*.csv
