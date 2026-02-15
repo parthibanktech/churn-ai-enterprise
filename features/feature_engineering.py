@@ -13,7 +13,7 @@ def engineer_enterprise_features(df_in):
         df['customerID'] = [f"CUST-{1000+i}" for i in range(len(df))]
         
     if 'TotalCharges' in df.columns:
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0)
     
     # 1. Tenure Categorization (Step 5.1)
     if 'tenure' in df.columns:

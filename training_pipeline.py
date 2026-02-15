@@ -134,6 +134,8 @@ def run_production_training():
 
     bundle = {
         'pipeline': production_pipeline,
+        'auc_score': float(best_auc),
+        'ks_stat': float(ks_stat),
         'metadata': {
             'auc_score': float(best_auc),
             'ks_stat': float(ks_stat),
