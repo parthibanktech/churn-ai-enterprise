@@ -74,9 +74,15 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Production
+      - name: Deploy to Render
+        if: github.ref == 'refs/heads/main'
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          # Placeholder for deployment logic
-          # In a real scenario, you would use a Render/Railway deploy hook or CLI
-          echo "Triggering deployment to Production Cloud..."
-          echo "Verified: All tests passed and build is stable."
+          if [ -n "$deploy_url" ]; then
+            echo "Directing Render to deploy latest stable build..."
+            curl -f "$deploy_url"
+          else
+            echo "Skipping Auto-Deploy: RENDER_DEPLOY_HOOK_URL not set in GitHub Secrets."
+            echo "See deployment_guidelines.md for setup instructions."
+          fi

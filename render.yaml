@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: churn-ai-platform
+    runtime: docker
+    plan: free # Can be changed to starter/pro
+    region: singapore # Nearer to user's time zone or default
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    autoDeploy: true
